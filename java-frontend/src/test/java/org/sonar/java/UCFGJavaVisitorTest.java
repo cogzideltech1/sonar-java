@@ -269,27 +269,46 @@ public class UCFGJavaVisitorTest {
   }
 
   @Test
-  public void create_multiple_auxiliaries_for_same_expression() {
+  public void create_new_ids_for_same_expression() {
     Expression.Variable arg = UCFGBuilder.variableWithId("arg");
     Expression.Variable aux0 = UCFGBuilder.variableWithId("%0");
     Expression.Variable aux1 = UCFGBuilder.variableWithId("%1");
-    Expression.Variable aux2 = UCFGBuilder.variableWithId("%2");
-    Expression.Variable aux3 = UCFGBuilder.variableWithId("%3");
     UCFG expectedUCFG = UCFGBuilder.createUCFGForMethod("A#foo(Ljava/lang/String;)Ljava/lang/String;").addMethodParam(arg)
         .addBasicBlock(newBasicBlock("1")
-            .assignTo(aux0, call("java.lang.Object#toString()Ljava/lang/String;").withArgs(constant("\"\"")), new LocationInFile(FILE_KEY, 3, 4, 3, 20))
-            .assignTo(aux1, call("java.lang.Object#toString()Ljava/lang/String;").withArgs(constant("\"\"")), new LocationInFile(FILE_KEY, 4, 4, 4, 20))
-            .assignTo(aux2, call("__concat").withArgs(constant("\"\""), arg), new LocationInFile(FILE_KEY, 5,15,5,25))
-            .assignTo(aux3, call("__concat").withArgs(constant("\"\""), arg), new LocationInFile(FILE_KEY, 6,15,6,25))
-            .ret(constant(""), new LocationInFile(FILE_KEY, 7, 4, 7, 14)))
+            .assignTo(aux0, call("__concat").withArgs(constant("\"\""), arg), new LocationInFile(FILE_KEY, 3,15,3,25))
+            .assignTo(aux1, call("__concat").withArgs(constant("\"\""), arg), new LocationInFile(FILE_KEY, 4,15,4,25))
+            .ret(constant(""), new LocationInFile(FILE_KEY, 5, 4, 5, 14)))
         .build();
     assertCodeToUCfg("class A { \n" +
         "  private String foo(String arg) { \n" +
-        "    super.toString();\n" +
-        "    super.toString();\n" +
         "    String x = true + arg;\n" +
         "    String y = true + arg;\n" +
         "    return \"\";\n" +
+        "  }\n" +
+        "}", expectedUCFG);
+  }
+
+  @Test
+  public void reuse_id_for_same_variable() {
+    Expression.Variable arg = UCFGBuilder.variableWithId("arg");
+    Expression.Variable aux0 = UCFGBuilder.variableWithId("%0");
+    Expression.Variable x = UCFGBuilder.variableWithId("x");
+    Expression.Variable y = UCFGBuilder.variableWithId("y");
+    Expression.Variable z = UCFGBuilder.variableWithId("z");
+    UCFG expectedUCFG = UCFGBuilder.createUCFGForMethod("A#foo(Ljava/lang/String;)Ljava/lang/String;").addMethodParam(arg)
+        .addBasicBlock(newBasicBlock("1")
+            .assignTo(x, call("__id").withArgs(arg), new LocationInFile(FILE_KEY, 3,4,3,19))
+            .assignTo(y, call("__id").withArgs(x), new LocationInFile(FILE_KEY, 4,4,4,17))
+            .assignTo(z, call("__id").withArgs(x), new LocationInFile(FILE_KEY, 5,4,5,17))
+            .assignTo(aux0, call("__concat").withArgs(y, z), new LocationInFile(FILE_KEY, 6,11,6,16))
+            .ret(aux0, new LocationInFile(FILE_KEY, 6, 4, 6, 17)))
+        .build();
+    assertCodeToUCfg("class A { \n" +
+        "  private String foo(String arg) { \n" +
+        "    String x = arg;\n" +
+        "    String y = x;\n" +
+        "    String z = x;\n" +
+        "    return y + z;\n" +
         "  }\n" +
         "}", expectedUCFG);
   }
@@ -341,6 +360,22 @@ public class UCFGJavaVisitorTest {
         "    x += 1;\n" +
         "    Consumer<String> c = s -> System.out.println(s);\n" +
         "    c.accept(\"foo\");\n" +
+        "  }\n" +
+        "}", expectedUCFG);
+  }
+
+  @Test
+  public void ignore_arrays() {
+    Expression.Variable arg0 = UCFGBuilder.variableWithId("foo");
+    Expression.Variable arg1 = UCFGBuilder.variableWithId("array");
+    UCFG expectedUCFG = UCFGBuilder.createUCFGForMethod("A#foo(Ljava/lang/String;[Ljava/lang/String;)Ljava/lang/String;").addMethodParam(arg0).addMethodParam(arg1)
+        .addBasicBlock(newBasicBlock("1")
+            .ret(constant("\"\""), new LocationInFile(FILE_KEY, 4, 4, 4, 20)))
+        .build();
+    assertCodeToUCfg("class A { \n" +
+        "  private String foo(String foo, String[] array) { \n" +
+        "    array[0] = foo;\n" +
+        "    return array[0];\n" +
         "  }\n" +
         "}", expectedUCFG);
   }
